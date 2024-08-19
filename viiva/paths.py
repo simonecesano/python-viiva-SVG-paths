@@ -7,7 +7,6 @@ import shapely.geometry as geom
 
 from . import beziers
 
-
 # ------------------------------------------------------------------------
 
 def to_complex(point):

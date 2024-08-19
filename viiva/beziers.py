@@ -1,12 +1,15 @@
 import re
 import sys
-from viiva.paths import *
 
 from beziers.path import BezierPath as CBezierPath
 from beziers.point import Point as CPoint
 from beziers.cubicbezier import CubicBezier as CCubicBezier
 from beziers.quadraticbezier import QuadraticBezier as CQuadraticBezier
 from beziers.line import Line as CLine
+
+from .paths import *
+
+# from . paths 
 
 # ------------------------------------------------------------------------------
 # utility for point conversion
@@ -94,7 +97,7 @@ class BezierPath(CBezierPath):
         segments = self.asSegments()
         # print(segments)
         for i, s in enumerate(segments):
-            n = s.__class__.__name__
+            n = "" + s.__class__.__name__
             b = globals()[n](*[ _p2i(p) for p in list(s) ])
             # print(n)
             # print([ _p2i(p) for p in list(s) ])
