@@ -1,10 +1,4 @@
-import copy
-import svgpathtools
-
-from math import sqrt
-
-import shapely.geometry as geom
-
+from ..paths import *
 from .. import beziers
 
 class Path(svgpathtools.Path):
@@ -18,6 +12,50 @@ class Path(svgpathtools.Path):
         else:
             super().__init__(*args, **kwargs)
 
+
+    @classmethod
+    def parse_d(classe, d):
+        """
+        Parse an SVG path data string into path segments
+
+        Args:
+            d (str): The SVG path data string to be parsed.
+
+        Returns:
+            Path: An object representing the parsed path with segments whose classes 
+            have been updated to be globally recognized.
+        """
+        parsed_path = svgpathtools.parse_path(d)
+        for i, segment in enumerate(parsed_path):
+            segment.__class__ = globals().get(segment.__class__.__name__)
+            parsed_path[i] = segment
+        parsed_path.__class__ = globals().get(parsed_path.__class__.__name__)
+        return parsed_path
+    
+    @classmethod
+    def parse_element(classe, element):
+        """
+        Parse an SVG element string into a path object.
+
+        Args:
+            element (str): The SVG element string to be parsed. This should be an XML string 
+                           representing an SVG element such as a circle or path.
+
+        Returns:
+            Path: An object representing the path created from the parsed SVG element.
+        """
+
+        root = ET.fromstring(element)
+        if root.tag == "circle":
+            attrib = root.attrib
+            t = getattr(svgpathtools.svg_to_paths, "ellipse2pathd")
+            attrib["rx"] = attrib["ry"] = attrib["r"]
+            return Path(t(attrib))
+        elif root.tag == "path":
+            return classe.parse_d(root.attrib["d"])
+        else:
+            t = getattr(svgpathtools.svg_to_paths, root.tag + "2pathd")
+            return Path(t(root.attrib))
 
     def kinks(self, tol=1e-8):
         return svgpathtools.kinks(self, tol)
@@ -33,6 +71,18 @@ class Path(svgpathtools.Path):
 
             
     def to_cubics(self, error=0.1):
+        """
+        Convert all path segments in the current object to cubic Bezier curves.
+ 
+        Args:
+            error (float, optional): The maximum error tolerance for approximating arcs with cubic Bezier curves.
+                                     A smaller value results in a closer approximation with more cubic segments.
+                                     Default is 0.1.
+
+        Returns:
+            The modified copy of the current object with all segments converted to cubic Bezier curves.
+        """
+
         _self = copy.deepcopy(self)
         _self.approximate_arcs_with_cubics(error=error)
         for i, a in enumerate(_self):
@@ -108,3 +158,5 @@ class Path(svgpathtools.Path):
             return super().d() + " Z"
         else:
             return super().d()
+        
+    
