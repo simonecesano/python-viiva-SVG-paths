@@ -1,8 +1,8 @@
 import copy
 import svgpathtools
-
 from math import sqrt
 
+import xml.etree.ElementTree as ET
 import shapely.geometry as geom
 
 from . import beziers
@@ -167,6 +167,29 @@ class Path(svgpathtools.Path):
             super().__init__(*args, **kwargs)
 
 
+    @classmethod
+    def parse_d(classe, d):
+        parsed_path = svgpathtools.parse_path(d)
+        for i, segment in enumerate(parsed_path):
+            segment.__class__ = globals().get(segment.__class__.__name__)
+            parsed_path[i] = segment
+        parsed_path.__class__ = globals().get(parsed_path.__class__.__name__)
+        return parsed_path
+    
+    @classmethod
+    def parse_element(classe, element):
+        root = ET.fromstring(element)
+        if root.tag == "circle":
+            attrib = root.attrib
+            t = getattr(svgpathtools.svg_to_paths, "ellipse2pathd")
+            attrib["rx"] = attrib["ry"] = attrib["r"]
+            return Path(t(attrib))
+        elif root.tag == "path":
+            return classe.parse_d(root.attrib["d"])
+        else:
+            t = getattr(svgpathtools.svg_to_paths, root.tag + "2pathd")
+            return Path(t(root.attrib))
+
     def kinks(self, tol=1e-8):
         return svgpathtools.kinks(self, tol)
 
@@ -258,35 +281,3 @@ class Path(svgpathtools.Path):
             return super().d()
         
     
-# ------------------------------------------------------------------------
-# x add to_cubic to Line
-# x add approximate_with_cubics to Arc
-# - cleanup as_polyline (add Quadratic case, fix Arc case)
-# x change as_ with to_
-# x change as_beziers in to_cubics
-# - create a bunch of test paths and test against them
-# x create to_shapely function
-# x move as_beziers in to_beziers to actually convert to cozens' beziers
-# - ensure that error param is passed on in approximation
-# - check that to_cubics actually closes the path
-# ------------------------------------------------------------------------
-
-# I'd like to have the following project structure
-
-# - viiva/__init__py - the main package
-# - viiva/paths.py contains CubicBezier, Arc, Line, QuadraticBezier classes
-# - viiva/paths/path.py contains the Path class
-# - viiva/beziers.py contains the BezierPath class
-
-# with the following requirements
-
-# - the Path class and the BezierPath class are both used inside viiva/paths.py
-# - inside viiva/paths.py a few functions are defined that are used inside viiva/paths/path.py
-# - I'd like to be able to write "from viiva import *" and have CubicBezier, Arc, Line, QuadraticBezier, Path and BezierPath classes available - and nothing else
-
-# Here are a few questions
-
-# - how must the imports look like in each file
-# - how does viiva/__init__.py look like
-
-
