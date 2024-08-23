@@ -2,7 +2,7 @@
 
 ## Name
 
-Viiva means line in finnish. It also sounds like an enthusiastic uttering if "Hooray" in Italian.
+Viiva means line in finnish. It also sounds like an enthusiastic uttering of "Hooray" in Italian. A lucky coincidence.
 
 ## Purpose and reason
 
