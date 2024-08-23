@@ -1,5 +1,4 @@
 import svgpathtools
-import svgpathtools.svg_to_paths
 from . import paths
 
 class Shape:
