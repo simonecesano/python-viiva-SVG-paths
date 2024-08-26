@@ -1,3 +1,4 @@
+import sys
 import copy
 import svgpathtools
 from math import sqrt
@@ -5,7 +6,9 @@ from math import sqrt
 import xml.etree.ElementTree as ET
 import shapely.geometry as geom
 
-# from . import beziers
+# from . path import Path
+
+# print(Path, file=sys.stderr)
 
 # ------------------------------------------------------------------------
 
@@ -37,6 +40,8 @@ def preprocess(args):
     elif isinstance(args, dict):
         return {k: to_complex(v) if isinstance(v, (list, tuple, dict)) or hasattr(v, 'x') else v for k, v in args.items()}
     return args
+
+# ------------------------------------------------------------------------
 
 class TolerantPath:
     def __init__(self, *args, **kwargs):
@@ -70,12 +75,6 @@ class Arc(TolerantPath, svgpathtools.Arc):
         return path
 
 class Line(TolerantPath, svgpathtools.Line):
-    def to_cubic_old(self):
-        start = self.start
-        end = self.end
-        cubic_bezier = CubicBezier(start, start, end, end)
-        return cubic_bezier
-
     def to_cubic(self, t=1/3):
         """
         Convert a line segment to a cubic Bezier curve with control points
@@ -108,7 +107,7 @@ class Line(TolerantPath, svgpathtools.Line):
         return cubic_bezier
     
 class CubicBezier(TolerantPath, svgpathtools.CubicBezier):
-    def as_polyline(self, flatness=0.01):
+    def to_polyline(self, flatness=0.01):
         """
         Recursively flatten a Bézier curve into a polyline with a given flatness.
 
@@ -135,7 +134,8 @@ class CubicBezier(TolerantPath, svgpathtools.CubicBezier):
                 return [p0, p3]
 
         points = subdivide(self)
-        polyline_path = Path()
+
+        polyline_path = svgpathtools.Path()
         for i in range(len(points) - 1):
             polyline_path.append(Line(points[i], points[i + 1]))
         return polyline_path
