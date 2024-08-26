@@ -1,5 +1,6 @@
 import re
 import sys
+import inspect
 
 from beziers.path import BezierPath as CBezierPath
 from beziers.point import Point as CPoint
@@ -8,6 +9,7 @@ from beziers.quadraticbezier import QuadraticBezier as CQuadraticBezier
 from beziers.line import Line as CLine
 
 from .paths import *
+from .paths.path import *
 
 # from . paths 
 
@@ -18,6 +20,8 @@ from .paths import *
 def _i2p(i): return CPoint(i.real, i.imag)
 
 def _p2i(p): return complex(p.x, p.y)
+
+def _t2p(t): return CPoint(x=t[0], y=t[1])
 
 # ------------------------------------------------------------------------------
 # decorator for camelcase functions
@@ -47,20 +51,21 @@ def method_wrapper(method_name, cls):
     @wraps(original_method)
     def wrapper(self, *args, **kwargs):
         result = original_method(self, *args, **kwargs)
-        
         # Ensure the result is an instance of the subclass
         if isinstance(result, list):
             return [ensure_subclass_instance(item, cls) for item in result]
         else:
             return ensure_subclass_instance(result, cls)
-
     return wrapper
 
 def map_methods_to_snake_case(cls):
     """Decorator to wrap all methods to ensure subclass instance returns."""
     # Get all methods from the superclass
-    for method_name in dir(cls.__bases__[0]):
-        if not method_name.startswith("_"):  # Skip private methods and dunder methods
+    superclass = cls.__bases__[0]
+    # print("superclass is", superclass, file=sys.stderr)
+    for method_name in dir(superclass):
+        if not (method_name.startswith("_") or (method_name in ["area", "length", "centroid"])):  # Skip private methods and dunder methods
+            attr = getattr(superclass, method_name)
             # Map the method name to snake_case
             snake_name = camel_to_snake(method_name)
             # Apply wrapper to camelCase methods
@@ -99,10 +104,6 @@ class BezierPath(CBezierPath):
         for i, s in enumerate(segments):
             n = "" + s.__class__.__name__
             b = globals()[n](*[ _p2i(p) for p in list(s) ])
-            # print(n)
-            # print([ _p2i(p) for p in list(s) ])
-            # print(globals()[n])
-            # print(b)
             segments[i] = b
         return Path(*segments)
         
@@ -124,6 +125,9 @@ class BezierPath(CBezierPath):
     def smoothed(self, *args, **kwargs):
         _self = copy.deepcopy(self)
         return _self.smooth(*args, **kwargs)
+
+    def offset(self, o):
+        return super().offset(_t2p(o))
     
     def d(self):
         d = self.asSVGPath()
@@ -141,7 +145,6 @@ class BezierPath(CBezierPath):
         return len(self.asSegments())
     
     def __getattr__(self, name):
-        # print(name, file=sys.stderr)
         # Check if the attribute or method exists in Path
         if hasattr(Path, name):
             # If it does, get the method from Path
@@ -154,3 +157,6 @@ class BezierPath(CBezierPath):
             # If it doesn't exist in Path, raise an AttributeError
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
         # return lambda *args, **kvargs: None
+
+
+        # --------------------------------------------------------
