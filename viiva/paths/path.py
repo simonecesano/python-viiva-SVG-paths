@@ -1,17 +1,37 @@
+import sys
+import re
+import xml.etree.ElementTree as ET
+
 from ..paths import *
 from .. import beziers
 
+D_PATTERN   = re.compile(r'^\s*[MLHVCSQTAZmlhvcsqtaz][0-9.,\s-]')
+XML_PATTERN = re.compile(r'^\s*<[a-z]+\s', re.IGNORECASE)
+NS_PATTERN  = re.compile(r'^.*}(.*)$')
+
+
+def remove_namespace(s):
+    match = NS_PATTERN.match(s)
+    if match:
+        return match.group(1)  # Return the part after the }
+    return s  # Return the original string if no match is found
+
 class Path(svgpathtools.Path):
     def __init__(self, *args, **kwargs):
-        if len(args) == 1 and isinstance(args[0], str):
-            parsed_path = svgpathtools.parse_path(args[0])
-            for i, segment in enumerate(parsed_path):
-                segment.__class__ = globals().get(segment.__class__.__name__)
-                parsed_path[i] = segment
+        if len(args) == 0:
+            super().__init__()
+        elif hasattr(args[0], 'attrib') and hasattr(args[0], 'tag'):
+            parsed_path = self.__class__.parse_element(args[0])
+            super().__init__(*parsed_path)
+        elif XML_PATTERN.match(args[0]):
+            parsed_path = self.__class__.parse_element(args[0])
+            super().__init__(*parsed_path)
+        elif D_PATTERN.match(args[0]):
+            parsed_path = self.__class__.parse_d(args[0])
             super().__init__(*parsed_path)
         else:
+            print("is something else", *args, file=sys.stderr)
             super().__init__(*args, **kwargs)
-
 
     @classmethod
     def parse_d(classe, d):
@@ -45,16 +65,21 @@ class Path(svgpathtools.Path):
             Path: An object representing the path created from the parsed SVG element.
         """
 
-        root = ET.fromstring(element)
-        if root.tag == "circle":
+        if hasattr(element, 'attrib') and hasattr(element, 'tag'):
+            root = element
+        else:
+            root = ET.fromstring(element)
+            
+        tag = remove_namespace(root.tag)
+        if tag == "circle":
             attrib = root.attrib
             t = getattr(svgpathtools.svg_to_paths, "ellipse2pathd")
             attrib["rx"] = attrib["ry"] = attrib["r"]
             return Path(t(attrib))
-        elif root.tag == "path":
+        elif tag == "path":
             return classe.parse_d(root.attrib["d"])
         else:
-            t = getattr(svgpathtools.svg_to_paths, root.tag + "2pathd")
+            t = getattr(svgpathtools.svg_to_paths, tag + "2pathd")
             return Path(t(root.attrib))
 
     def kinks(self, tol=1e-8):
@@ -93,7 +118,7 @@ class Path(svgpathtools.Path):
                 _self[i] = a
         return _self
 
-    def as_polyline(self, flatness=0.1):
+    def to_polyline(self, flatness=0.1):
         """
         Convert an svgpathtools Path to a polyline Path using Inkscape-like flattening with specified flatness.
 
@@ -113,15 +138,15 @@ class Path(svgpathtools.Path):
 
         for segment in path:
             if isinstance(segment, CubicBezier):
-                lines = segment.as_polyline(flatness)
+                lines = segment.to_polyline(flatness)
                 for line in lines:
                     polyline_path.append(line)
             elif isinstance(segment, Line):
                 polyline_path.append(Line(segment.start, segment.end))
             elif isinstance(segment, Arc):
-                arc_points = segment.approximate_with_cubics()  # Approximate Arc with Cubic Beziers
+                arc_points = segment.approximate_with_cubics()
                 for bez in arc_points:
-                    points = bez.as_polyline(flatness)
+                    points = bez.to_polyline(flatness)
                     for i in range(len(points) - 1):
                         polyline_path.append(Line(points[i], points[i + 1]))
         return polyline_path
@@ -140,10 +165,11 @@ class Path(svgpathtools.Path):
         Returns:
             shapely.geometry.LineString or shapely.geometry.Polygon: The corresponding Shapely object.
         """
-        path = self.as_polyline()
+        path = self.to_polyline()
 
         # Extract the coordinates from the Line segments
         coords = [(line.start.real, line.start.imag) for line in path if isinstance(line, Line)]
+        coords.append((path[-1].end.real, path[-1].end.imag))
         if not coords:
             raise ValueError("Path does not contain any Line segments.")
 
@@ -160,3 +186,22 @@ class Path(svgpathtools.Path):
             return super().d()
         
     
+    def offset(self, offset_distance, steps=1000):
+        """Takes in a Path object, `path`, and a distance,
+        `offset_distance`, and outputs an piecewise-linear approximation 
+        of the 'parallel' offset curve."""
+        nls = []
+        for seg in self:
+            ct = 1
+            for k in range(steps):
+                t = k / steps
+                offset_vector = offset_distance * seg.normal(t)
+                nl = Line(seg.point(t), seg.point(t) + offset_vector)
+                nls.append(nl)
+        connect_the_dots = [Line(nls[k].end, nls[k+1].end) for k in range(len(nls)-1)]
+        if self.isclosed():
+            connect_the_dots.append(Line(nls[-1].end, nls[0].end))
+        offset_path = Path()
+        for c in connect_the_dots:
+            offset_path.append(c)
+        return offset_path
